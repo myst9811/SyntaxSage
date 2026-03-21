@@ -7,6 +7,9 @@ import json
 class VectorlessDocumentProcessor:
     """Orchestrates BM25 + PageIndex ingestion for a code repository."""
 
+    SKIP_DIRS = {'venv', '.venv', '__pycache__', '.git', 'node_modules', '.tox',
+                 'dist', 'build', '.next', '.cache', 'coverage', 'env'}
+
     def __init__(self):
         self.page_indexer = HierarchicalPageIndexer()
         self.bm25_index = BM25Index()
@@ -16,17 +19,19 @@ class VectorlessDocumentProcessor:
         if extensions is None:
             extensions = ['.py']
 
-        repo = Path(repo_path)
-        skip_dirs = {'venv', '.venv', '__pycache__', '.git', 'node_modules', '.tox', 'dist', 'build'}
+        repo = Path(repo_path).resolve()
+        if not repo.is_dir():
+            raise FileNotFoundError(f"Repository path does not exist: {repo}")
+
         processed = 0
+        skipped = 0
 
         for file_path in repo.rglob('*'):
             if not file_path.is_file():
                 continue
             if file_path.suffix not in extensions:
                 continue
-            # Skip unwanted directories
-            if any(part in skip_dirs for part in file_path.parts):
+            if any(part in self.SKIP_DIRS for part in file_path.parts):
                 continue
 
             try:
@@ -51,13 +56,16 @@ class VectorlessDocumentProcessor:
                     )
                 processed += 1
             except Exception as e:
+                skipped += 1
                 print(f"Warning: skipping {file_path}: {e}")
 
         self.bm25_index.compute_idf()
         print(f"Indexed {self.bm25_index.total_docs} chunks from {processed} files.")
+        if skipped:
+            print(f"Skipped {skipped} files due to errors.")
 
     def save_indexes(self, bm25_path: str, pageindex_path: str):
-        """Persist BM25 index (pickle) and PageIndex (JSON) to disk."""
+        """Persist BM25 index (JSON) and PageIndex (JSON) to disk."""
         self.bm25_index.save(bm25_path)
         with open(pageindex_path, 'w', encoding='utf-8') as f:
             json.dump(self.page_indexer.serialize(), f, indent=2)
