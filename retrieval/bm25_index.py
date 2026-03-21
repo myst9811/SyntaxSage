@@ -23,8 +23,8 @@ class BM25Index:
 
     def tokenize(self, text: str) -> List[str]:
         """Code-aware tokenization: splits on whitespace, camelCase, and underscores."""
-        text = text.lower()
         text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+        text = text.lower()
         tokens = re.findall(r'\b\w+\b', text)
         stop_words = {
             'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
