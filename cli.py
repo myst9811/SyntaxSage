@@ -11,20 +11,22 @@ def cli():
 
 @cli.command()
 @click.option('--repo-path', required=True, help='Path to the code repository to index.')
-@click.option('--bm25-index', default='bm25.pkl', show_default=True, help='Output path for BM25 index.')
+@click.option('--bm25-index', default='bm25_index.json', show_default=True, help='Output path for BM25 index.')
 @click.option('--pageindex', default='pageindex.json', show_default=True, help='Output path for PageIndex.')
-def index_vectorless(repo_path, bm25_index, pageindex):
+@click.option('--extensions', default='.py,.js,.ts,.tsx', show_default=True, help='Comma-separated file extensions to index.')
+def index_vectorless(repo_path, bm25_index, pageindex, extensions):
     """Index a repository with BM25 + PageIndex (vectorless)."""
-    click.echo(f"Indexing {repo_path} ...")
+    exts = [e.strip() for e in extensions.split(',')]
+    click.echo(f"Indexing {repo_path} (extensions: {', '.join(exts)}) ...")
     processor = VectorlessDocumentProcessor()
-    processor.process_repository(repo_path)
+    processor.process_repository(repo_path, extensions=exts)
     processor.save_indexes(bm25_index, pageindex)
     click.echo(f"Done. Indexes saved to {bm25_index} and {pageindex}.")
 
 
 @cli.command()
 @click.option('--query', required=True, help='Search query.')
-@click.option('--bm25-index', default='bm25.pkl', show_default=True, help='Path to BM25 index.')
+@click.option('--bm25-index', default='bm25_index.json', show_default=True, help='Path to BM25 index.')
 @click.option('--pageindex', default='pageindex.json', show_default=True, help='Path to PageIndex.')
 @click.option('--top-k', default=5, show_default=True, help='Number of results to return.')
 def search_vectorless(query, bm25_index, pageindex, top_k):

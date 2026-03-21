@@ -127,6 +127,51 @@ class HierarchicalPageIndexer:
                     'line': content[:import_matches[0].start()].count('\n') + 1,
                 })
 
+        elif language in ('javascript', 'typescript'):
+            # Classes
+            for match in re.finditer(r'^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)', content, re.MULTILINE):
+                start = match.start()
+                end = self._find_js_block_end(content, start)
+                units.append({
+                    'type': 'class',
+                    'name': match.group(1),
+                    'text': content[start:end],
+                    'start': start,
+                    'end': end,
+                    'line': content[:start].count('\n') + 1,
+                })
+
+            # Functions (function declarations + arrow functions assigned to const/let)
+            for match in re.finditer(
+                r'^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(|'
+                r'^(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:async\s+)?\(',
+                content, re.MULTILINE
+            ):
+                name = match.group(1) or match.group(2)
+                start = match.start()
+                end = self._find_js_block_end(content, start)
+                units.append({
+                    'type': 'function',
+                    'name': name,
+                    'text': content[start:end],
+                    'start': start,
+                    'end': end,
+                    'line': content[:start].count('\n') + 1,
+                })
+
+            # Imports
+            import_matches = list(re.finditer(r'^import\s+.+', content, re.MULTILINE))
+            if import_matches:
+                text = '\n'.join(m.group(0) for m in import_matches)
+                units.append({
+                    'type': 'import',
+                    'name': 'imports',
+                    'text': text,
+                    'start': import_matches[0].start(),
+                    'end': import_matches[-1].end(),
+                    'line': content[:import_matches[0].start()].count('\n') + 1,
+                })
+
         return sorted(units, key=lambda x: x['start'])
 
     def _find_block_end(self, content: str, start: int) -> int:
@@ -143,6 +188,23 @@ class HierarchicalPageIndexer:
                 for j in range(i):
                     pos += len(lines[j]) + 1  # +1 for newline
                 return pos
+        return len(content)
+
+    def _find_js_block_end(self, content: str, start: int) -> int:
+        """Find the end of a JS/TS block by matching braces."""
+        i = start
+        depth = 0
+        found_open = False
+        while i < len(content):
+            c = content[i]
+            if c == '{':
+                depth += 1
+                found_open = True
+            elif c == '}':
+                depth -= 1
+                if found_open and depth == 0:
+                    return i + 1
+            i += 1
         return len(content)
 
     def expand_context(self, chunk_id: str) -> Optional[Dict]:

@@ -68,6 +68,7 @@ class VectorlessDocumentProcessor:
     def _detect_language(suffix: str) -> str:
         mapping = {
             '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+            '.tsx': 'typescript', '.jsx': 'javascript',
             '.java': 'java', '.cpp': 'cpp', '.c': 'c', '.go': 'go',
         }
         return mapping.get(suffix, 'plaintext')

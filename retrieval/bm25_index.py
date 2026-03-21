@@ -1,8 +1,10 @@
 from typing import List, Dict, Tuple
 from collections import defaultdict
+import json
 import math
 import re
-import pickle
+
+INDEX_VERSION = 1
 
 
 class BM25Index:
@@ -11,18 +13,17 @@ class BM25Index:
     def __init__(self, k1: float = 1.5, b: float = 0.75):
         self.k1 = k1
         self.b = b
-        self.documents = {}
-        self.inverted_index = defaultdict(set)
-        self.doc_lengths = {}
-        self.term_frequencies = defaultdict(lambda: defaultdict(int))
-        self.idf = {}
-        self.avg_doc_length = 0
-        self.total_docs = 0
+        self.documents: Dict[str, Dict] = {}
+        self.inverted_index: Dict[str, set] = defaultdict(set)
+        self.doc_lengths: Dict[str, int] = {}
+        self.term_frequencies: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self.idf: Dict[str, float] = {}
+        self.avg_doc_length: float = 0
+        self.total_docs: int = 0
 
     def tokenize(self, text: str) -> List[str]:
-        """Code-aware tokenization: splits on whitespace + camelCase + underscores."""
+        """Code-aware tokenization: splits on whitespace, camelCase, and underscores."""
         text = text.lower()
-        # Split camelCase: e.g. "myFunction" -> "my function"
         text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
         tokens = re.findall(r'\b\w+\b', text)
         stop_words = {
@@ -71,24 +72,36 @@ class BM25Index:
         return ranked[:top_k]
 
     def save(self, path: str):
-        """Serialize index to disk."""
-        with open(path, 'wb') as f:
-            pickle.dump({
-                'documents': self.documents,
-                'inverted_index': dict(self.inverted_index),
-                'doc_lengths': self.doc_lengths,
-                'term_frequencies': {k: dict(v) for k, v in self.term_frequencies.items()},
-                'idf': self.idf,
-                'avg_doc_length': self.avg_doc_length,
-                'total_docs': self.total_docs,
-                'k1': self.k1,
-                'b': self.b,
-            }, f)
+        """Serialize index to JSON (safe, portable)."""
+        data = {
+            'version': INDEX_VERSION,
+            'k1': self.k1,
+            'b': self.b,
+            'total_docs': self.total_docs,
+            'avg_doc_length': self.avg_doc_length,
+            'documents': self.documents,
+            'inverted_index': {k: sorted(v) for k, v in self.inverted_index.items()},
+            'doc_lengths': self.doc_lengths,
+            'term_frequencies': {k: dict(v) for k, v in self.term_frequencies.items()},
+            'idf': self.idf,
+        }
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
 
     def load(self, path: str):
-        """Load index from disk."""
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
+        """Load index from JSON."""
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        version = data.get('version', 0)
+        if version != INDEX_VERSION:
+            raise ValueError(
+                f"Index version mismatch: file is v{version}, expected v{INDEX_VERSION}. "
+                "Please re-index your repository."
+            )
+        self.k1 = data['k1']
+        self.b = data['b']
+        self.total_docs = data['total_docs']
+        self.avg_doc_length = data['avg_doc_length']
         self.documents = data['documents']
         self.inverted_index = defaultdict(set, {k: set(v) for k, v in data['inverted_index'].items()})
         self.doc_lengths = data['doc_lengths']
@@ -97,7 +110,3 @@ class BM25Index:
             for term, count in terms.items():
                 self.term_frequencies[doc_id][term] = count
         self.idf = data['idf']
-        self.avg_doc_length = data['avg_doc_length']
-        self.total_docs = data['total_docs']
-        self.k1 = data.get('k1', self.k1)
-        self.b = data.get('b', self.b)

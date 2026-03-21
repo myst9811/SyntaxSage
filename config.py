@@ -9,7 +9,7 @@ class Settings:
     bm25_k1: float = 1.5
     bm25_b: float = 0.75
     top_k: int = 5
-    bm25_index_path: str = "bm25.pkl"
+    bm25_index_path: str = "bm25_index.json"
     pageindex_path: str = "pageindex.json"
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     llm_model: str = "claude-sonnet-4-6"
