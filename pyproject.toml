@@ -16,5 +16,8 @@ dependencies = [
 [project.scripts]
 syntaxsage = "cli:cli"
 
+[tool.setuptools]
+py-modules = ["cli", "config", "app"]
+
 [tool.setuptools.packages.find]
 exclude = ["venv*", "tests*"]
