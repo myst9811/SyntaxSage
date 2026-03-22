@@ -49,7 +49,8 @@ with col1:
                     with st.expander(label):
                         left, right = st.columns([3, 1])
                         with left:
-                            st.code(result.text, language="python")
+                            lang = result.metadata.get('language', 'python')
+                            st.code(result.text, language=lang)
                         with right:
                             st.metric("BM25 Score", f"{result.bm25_score:.3f}")
                             st.metric("Combined", f"{result.combined_score:.0%}")
