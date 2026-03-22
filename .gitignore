@@ -36,6 +36,10 @@ env.bak/
 venv.bak/
 .venv
 
+# SyntaxSage indexes
+.syntaxsage/
+*.pkl
+
 # ChromaDB (Vector database - can be large)
 chroma_db/
 *.db
