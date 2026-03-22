@@ -6,8 +6,11 @@ import click
 from ingest.vectorless_processor import VectorlessDocumentProcessor
 from retrieval.hybrid_retriever import HybridRetriever
 
+VERSION = "0.1.0"
+
 
 @click.group()
+@click.version_option(version=VERSION, prog_name="syntaxsage")
 def cli():
     """SyntaxSage: Vectorless Code Search RAG"""
     pass
@@ -16,22 +19,30 @@ def cli():
 @cli.command()
 @click.option('--repo-path', required=True, type=click.Path(exists=True, file_okay=False),
               help='Path to the code repository to index.')
-@click.option('--bm25-index', default='bm25_index.json', show_default=True, help='Output path for BM25 index.')
-@click.option('--pageindex', default='pageindex.json', show_default=True, help='Output path for PageIndex.')
+@click.option('--bm25-index', default=None, show_default=False,
+              help='Output path for BM25 index. Defaults to <repo-path>/.syntaxsage/bm25_index.json')
+@click.option('--pageindex', default=None, show_default=False,
+              help='Output path for PageIndex. Defaults to <repo-path>/.syntaxsage/pageindex.json')
 @click.option('--extensions', default='.py,.js,.ts,.tsx', show_default=True,
               help='Comma-separated file extensions to index.')
 def index_vectorless(repo_path, bm25_index, pageindex, extensions):
     """Index a repository with BM25 + PageIndex (vectorless)."""
+    repo = Path(repo_path).resolve()
+    syntaxsage_dir = repo / '.syntaxsage'
+    bm25_path = bm25_index or str(syntaxsage_dir / 'bm25_index.json')
+    pageindex_path = pageindex or str(syntaxsage_dir / 'pageindex.json')
+
     exts = [e.strip() if e.strip().startswith('.') else f'.{e.strip()}' for e in extensions.split(',')]
     click.echo(f"Indexing {repo_path} (extensions: {', '.join(exts)}) ...")
     try:
+        syntaxsage_dir.mkdir(parents=True, exist_ok=True)
         processor = VectorlessDocumentProcessor()
         processor.process_repository(repo_path, extensions=exts)
         if processor.bm25_index.total_docs == 0:
             click.echo("Warning: no code chunks found. Check the repo path and extensions.", err=True)
             return
-        processor.save_indexes(bm25_index, pageindex)
-        click.echo(f"Done. Indexes saved to {bm25_index} and {pageindex}.")
+        processor.save_indexes(bm25_path, pageindex_path)
+        click.echo(f"Done. Indexes saved to {bm25_path} and {pageindex_path}.")
     except Exception as e:
         click.echo(f"Error during indexing: {e}", err=True)
         sys.exit(1)
@@ -39,10 +50,10 @@ def index_vectorless(repo_path, bm25_index, pageindex, extensions):
 
 @cli.command()
 @click.option('--query', required=True, help='Search query.')
-@click.option('--bm25-index', default='bm25_index.json', show_default=True,
-              type=click.Path(exists=True), help='Path to BM25 index.')
-@click.option('--pageindex', default='pageindex.json', show_default=True,
-              type=click.Path(exists=True), help='Path to PageIndex.')
+@click.option('--bm25-index', default='.syntaxsage/bm25_index.json', show_default=True,
+              help='Path to BM25 index.')
+@click.option('--pageindex', default='.syntaxsage/pageindex.json', show_default=True,
+              help='Path to PageIndex.')
 @click.option('--top-k', default=5, show_default=True, help='Number of results to return.')
 def search_vectorless(query, bm25_index, pageindex, top_k):
     """Search the indexed codebase using vectorless BM25 retrieval."""
@@ -50,9 +61,12 @@ def search_vectorless(query, bm25_index, pageindex, top_k):
     try:
         retriever = HybridRetriever.from_indexes(bm25_index, pageindex)
         results = retriever.search(query, top_k=top_k)
+    except FileNotFoundError:
+        click.echo(f"Error: index files not found at {bm25_index} / {pageindex}", err=True)
+        click.echo("Have you indexed a repository first?  syntaxsage index-vectorless --repo-path <path>", err=True)
+        sys.exit(1)
     except Exception as e:
         click.echo(f"Error loading indexes: {e}", err=True)
-        click.echo("Have you indexed a repository first?  python cli.py index-vectorless --repo-path <path>", err=True)
         sys.exit(1)
 
     if not results:
