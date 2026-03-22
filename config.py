@@ -1,5 +1,8 @@
 import os
 from dataclasses import dataclass
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 @dataclass
@@ -9,8 +12,8 @@ class Settings:
     bm25_k1: float = 1.5
     bm25_b: float = 0.75
     top_k: int = 5
-    bm25_index_path: str = "bm25_index.json"
-    pageindex_path: str = "pageindex.json"
+    bm25_index_path: str = ".syntaxsage/bm25_index.json"
+    pageindex_path: str = ".syntaxsage/pageindex.json"
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     llm_model: str = "claude-sonnet-4-6"
     llm_max_tokens: int = 2048
