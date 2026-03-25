@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict
 from dataclasses import dataclass, field
 from retrieval.bm25_index import BM25Index
 from ingest.page_indexer import HierarchicalPageIndexer
@@ -38,16 +38,14 @@ class HybridRetriever:
         self,
         query: str,
         top_k: int = 5,
-        bm25_weight: float = 0.8,
-        structural_weight: float = 0.2,
+        bm25_weight: float = 0.7,
+        dense_weight: float = 0.2,
+        structural_weight: float = 0.1,
     ) -> List[HybridResult]:
-        """Run hybrid search and return ranked results.
-
-        Weights are normalised to sum to 1.0 internally.
-        """
+        """Run hybrid search and return ranked results."""
         results: Dict[str, HybridResult] = {}
 
-        # BM25 search — fetch extra candidates so structural scoring can re-rank
+        # BM25 search
         bm25_hits = self.bm25_index.search(query, top_k=top_k * 3)
         for chunk_id, bm25_score in bm25_hits:
             doc = self.bm25_index.documents.get(chunk_id, {})
@@ -62,22 +60,21 @@ class HybridRetriever:
             return []
 
         max_bm25 = max(r.bm25_score for r in results.values()) or 1.0
-        total_weight = bm25_weight + structural_weight or 1.0
 
+        # Compute combined scores
         for chunk_id, result in results.items():
             bm25_norm = result.bm25_score / max_bm25
             chunk_type = result.metadata.get('type', 'unknown')
             structural = self.STRUCTURAL_SCORES.get(chunk_type, 0.3)
             result.structural_score = structural
             result.combined_score = (
-                bm25_weight * bm25_norm + structural_weight * structural
-            ) / total_weight
+                bm25_weight * bm25_norm
+                + structural_weight * structural
+            )
             result.breadcrumb = self.page_indexer.get_breadcrumb(chunk_id)
             context = self.page_indexer.expand_context(chunk_id)
             if context:
-                result.related_chunks = [
-                    c.chunk_id for c in context.get('siblings', [])
-                ]
+                result.related_chunks = context.get('siblings', [])
 
         sorted_results = sorted(results.values(), key=lambda x: x.combined_score, reverse=True)
         return sorted_results[:top_k]
